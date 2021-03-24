@@ -1,0 +1,395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: #000;
+        }
+
+        #box {
+            position: fixed;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 512px;
+            height: 768px;
+            margin: auto;
+            /*background-image: url(images/bg_2.jpg);*/
+        }
+
+        #box h2 {
+            text-align: center;
+            line-height: 230px;
+            font-size: 30px;
+            color: #fff;
+        }
+
+        #box ul li {
+            list-style-type: none;
+            width: 200px;
+            height: 40px;
+            margin: 50px auto;
+            line-height: 40px;
+            text-align: center;
+            background-color: #fff;
+            font-size: 20px;
+            cursor: pointer;
+            transition: .2s;
+        }
+
+        #box ul li:hover {
+            background-color: pink;
+        }
+
+        #box .plane {
+            position: absolute;
+            width: 60px;
+            height: 48px;
+            background: url('images/plane_1.png') 0 0/cover;
+        }
+
+        #box .bullet {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: url('images/fire.png') 0 0/cover;
+        }
+
+        #box .enemy {
+            position: absolute;
+            top: 0;
+            width: 54px;
+            height: 40px;
+            background: url(images/enemy_small.png) 0 0/cover;
+        }
+
+        #box .boom {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: url('images/boom_small.png') 0 0/cover;
+        }
+
+        #box .planeBoom {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: url('images/boom_big.png') 0 0/cover;
+        }
+
+        #box .interFace {
+            position: absolute;
+            left: 0;
+            right: 0;
+            margin: auto;
+            top: 200px;
+            width: 300px;
+            height: 350px;
+            background-color: rgba(0, 0, 0, .5);
+            animation: bling 1s infinite alternate;
+        }
+
+        #box .interFace button {
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 100px;
+            height: 30px;
+            margin: auto;
+            color: #000;
+        }
+
+        #box .scoreContainer {
+            position: absolute;
+            width: 100px;
+            height: 30px;
+            text-align: center;
+            line-height: 30px;
+            color: #fff;
+            font-size: 30px;
+        }
+        #box .homeBtn{
+            position: absolute;
+            right: 0;
+            width: 100px;
+            height: 50px;
+            background-color: rgba(255, 255, 255, .5);
+            text-align: center;
+            line-height: 50px;
+            animation: bling 1s infinite alternate;
+
+        }
+        @keyframes bling {
+            0% {
+                opacity: 1;
+            }
+
+            100% {
+                opacity: .7;
+            }
+        }
+    </style>
+</head>
+<body>
+<div id="box"></div>
+<script src="js/animation.js"></script>
+<script>
+    function Game(node){
+        this.node = document.querySelector(node);
+        this.level = ['简单','中等','困难','噩梦'];
+        this.levelSpeed = ['1000','600','100','50'];
+        this.startLeft = this.node.offsetLeft;
+        this.startTop = this.node.offsetTop;
+        this.width = this.node.clientWidth;
+        this.height = this.node.clientHeight;
+        this.grade = 0;
+        this.init();
+    }
+    Game.prototype = {
+        // init函数的作用：初始化游戏界面
+        init:function(){
+            //游戏标题
+            this.title = document.createElement('h2');
+            this.title.innerText = '飞机大战';
+            this.node.appendChild(this.title);
+
+            //游戏关卡选项
+            this.oUl = document.createElement('ul');
+            this.node.appendChild(this.oUl);
+            for (var i=0;i<this.level.length;i++){
+                var ali = document.createElement('li');
+                this.oUl.appendChild(ali);
+                ali.innerText = this.level[i];
+            }
+
+            //利用事件委托 给oUl子节点绑定事件监听
+            this.oUl.addEventListener('click',this.handleClick.bind(this),false);
+            this.changeBg(2);
+        },
+        //获取鼠标点击的哪个li
+        handleClick:function(e){
+            e = e||window.event;
+
+            if (e.target.nodeName==='UL') return;
+            this.index = [].indexOf.call(this.oUl.children,e.target);
+
+            this.changeBg(this.index+1);
+            this.startGame(e);
+        },
+        //修改背景图片
+        changeBg:function(index){
+            this.node.style.backgroundImage = 'url(images/bg_'+index+'.jpg)'
+        },
+        //开始游戏
+        startGame:function(e){
+            //清空所有节点
+            this.node.innerText = '';
+            this.createPlane(e);
+
+            //创建游戏右上角返回主界面按钮
+            var homeBtn = document.createElement('div');
+            homeBtn.className = 'homeBtn';
+            homeBtn.innerText = '返回主菜单';
+            this.node.appendChild(homeBtn);
+            homeBtn.addEventListener('click',this.btnClick.bind(this),false);
+
+
+            //创建游戏左上角分数
+            this.gradeSpan = document.createElement('span');
+            this.gradeSpan.className = 'scoreContainer';
+            this.gradeSpan.innerText = this.grade + '分';
+            this.node.appendChild(this.gradeSpan);
+            //子弹弹夹
+            this.bulletClip = [];
+            //存放敌军数组
+            this.enemyList = [];
+
+            //子弹定时器
+            this.planeTime = setInterval(this.createBullet.bind(this),100);
+            this.planeTimeMove = setInterval(this.bulletMove.bind(this),50);
+
+            //敌军定时器
+            this.enemyTime = setInterval(this.createEnemy.bind(this),this.levelSpeed[this.index]);
+            this.enemyTimeMove = setInterval(this.enemyMove.bind(this),50);
+
+            document.addEventListener('mousemove',this.planeMove.bind(this),false)
+        },
+        //创建敌军
+        createEnemy:function(){
+            this.enemy = document.createElement('div');
+            this.enemy.className = 'enemy';
+            this.node.appendChild(this.enemy);
+            this.enemyList.push(this.enemy);
+
+            //设置敌军初始随机位置
+            this.enemy.style.left = (this.width - this.enemy.clientWidth) * Math.random() + 'px';
+
+        },
+        //敌军移动
+        enemyMove:function(){
+            for (var i=0;i<this.enemyList.length;i++){
+                var enemy = this.enemyList[i];
+                enemy.style.top = enemy.offsetTop + 20 + 'px';
+                if (enemy.offsetTop>this.height){
+                    enemy.parentNode.removeChild(enemy);
+                    this.enemyList.splice(i,1);
+                    i--;
+                }
+                //判断我军与敌军撞击
+                if (this.plane.parentNode&&this.judgeCrash(enemy,this.plane)) {
+                    this.planeBlast = document.createElement('div');
+                    this.planeBlast.className = 'planeBoom';
+                    this.node.appendChild(this.planeBlast);
+
+                    this.planeBlast.style.top = enemy.offsetTop + 'px';
+                    this.planeBlast.style.left = enemy.offsetLeft + 'px';
+
+
+                    this.plane.parentNode.removeChild(this.plane);
+                    enemy.parentNode.removeChild(enemy);
+                    this.enemyList.splice(i,1);
+                    i--;
+
+                    clearInterval(this.planeTime);
+                    clearInterval(this.enemyTime);
+                    animation(this.planeBlast,{
+                        opacity:0,
+                    },2,function(){
+                        if (this.planeBlast.parentNode){
+                            this.planeBlast.parentNode.removeChild(this.planeBlast);
+                            this.gameOver();
+                        }
+                    }.bind(this));
+
+                }
+            }
+        },
+        //游戏结束
+        gameOver:function(){
+            clearInterval(this.planeTimeMove);
+            clearInterval(this.enemyTimeMove);
+            this.gameOverPopup()
+        },
+        //游戏结束弹窗
+        gameOverPopup:function(){
+            var popup = document.createElement('div');
+            popup.className = 'interFace';
+            this.node.appendChild(popup);
+
+            var btn = document.createElement('button');
+            btn.innerText = '游戏结束';
+            popup.appendChild(btn);
+
+            btn.addEventListener('click',this.btnClick.bind(this),false)
+        },
+        //游戏结束返回主界面
+        btnClick:function(){
+            if (this.planeTimeMove){
+                this.gameOver();
+                clearInterval(this.planeTime);
+                clearInterval(this.enemyTime);
+            }
+            this.node.innerText = '';
+            new Game('#box');
+        },
+        //封装检测两种物体是否碰撞
+        judgeCrash:function(dom1,dom2){
+            var bool = dom1.offsetTop+dom1.clientHeight<dom2.offsetTop
+                        ||dom2.offsetTop+dom2.clientHeight<dom1.offsetTop
+                        ||dom1.offsetLeft+dom1.clientWidth<dom2.offsetLeft
+                        ||dom2.offsetLeft+dom2.clientWidth<dom1.offsetLeft;
+            return bool?false:true;
+        },
+        //创建飞机
+        createPlane:function(e){
+            this.plane = document.createElement('div');
+            this.plane.className = 'plane';
+            this.node.appendChild(this.plane);
+
+            this.plane.style.left = e.clientX - this.startLeft - (this.plane.clientWidth/2) + 'px';
+            this.plane.style.top = e.clientY - this.startTop - (this.plane.clientHeight/2) + 'px';
+
+        },
+        //飞机移动
+        planeMove:function(e){
+            this.moveLeft = e.clientX - this.startLeft - (this.plane.clientWidth/2);
+            this.moveTop = e.clientY - this.startTop - (this.plane.clientHeight/2);
+
+            //设置飞机左边边界
+            this.moveLeft = Math.max(0,this.moveLeft);
+            this.moveLeft = Math.min(this.moveLeft,this.width-this.plane.clientWidth);
+
+            // 设置飞机上下边界
+            this.moveTop = Math.max(0,this.moveTop);
+            this.moveTop = Math.min(this.moveTop,this.height-this.plane.clientHeight);
+
+            this.plane.style.left = this.moveLeft + 'px';
+            this.plane.style.top =  this.moveTop + 'px';
+        },
+        //创建子弹
+        createBullet:function(){
+            this.bullet = document.createElement('div');
+            this.bullet.className = 'bullet';
+            this.node.appendChild(this.bullet);
+            this.bulletClip.push(this.bullet);
+
+            this.bullet.style.left = this.plane.offsetLeft + (this.plane.clientWidth/2) - (this.bullet.clientWidth/2)  + 'px' ;
+            this.bullet.style.top =  this.plane.offsetTop - this.bullet.clientHeight  + 'px';
+
+        },
+        //子弹移动
+        bulletMove:function(){
+            for (var i=0;i<this.bulletClip.length;i++){
+                var bullet = this.bulletClip[i];
+                bullet.style.top = bullet.offsetTop - 20 +'px';
+                if (bullet.offsetTop<0){
+                    bullet.parentNode.removeChild(bullet);
+                    this.bulletClip.splice(i,1);
+                    i--;
+                }
+                for (var j=0;j<this.enemyList.length;j++){
+                    var enemy = this.enemyList[j];
+                    if (bullet.parentNode&&this.judgeCrash(enemy, bullet)){
+                        this.grade += 10;
+                        this.gradeSpan.innerText = this.grade + '分';
+
+                        //子弹与敌军碰撞
+                        this.bulletBlast = document.createElement('div');
+                        this.bulletBlast.className = 'boom';
+                        this.node.appendChild(this.bulletBlast);
+
+                        this.bulletBlast.style.top = enemy.offsetTop + 'px';
+                        this.bulletBlast.style.left = enemy.offsetLeft + 'px';
+
+                        bullet.parentNode.removeChild(bullet);
+                        this.bulletClip.splice(i,1);
+                        i--;
+
+                        enemy.parentNode.removeChild(enemy);
+                        this.enemyList.splice(j,1);
+                        j--;
+
+                        animation(this.bulletBlast,{
+                            opacity:0,
+                        },1,function () {
+                            this.parentNode.removeChild(this)
+                        })
+                    }
+                }
+            }
+        },
+    };
+    var game = new Game('#box');
+</script>
+</body>
+</html>
